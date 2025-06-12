@@ -45,6 +45,28 @@ class HabitsCubit extends Cubit<HabitsState> {
       emit(const HabitsError('Failed to add habit'));
     }
   }
+  
+  // This method adds multiple habits at once
+  Future<void> addMultipleHabits(List<Map<String, dynamic>> habitsData) async {
+    emit(HabitsLoading());
+    try {
+      await _habitService.addMultipleHabits(habitsData);
+      
+      // Reload habits after adding all
+      final habits = await _habitService.getHabits();
+      final completedHabits = await _habitService.getTodayCompletedHabits();
+      final incompleteHabits = await _habitService.getTodayIncompleteHabits();
+      
+      emit(HabitsOperationSuccess(
+        message: 'Habits added successfully!',
+        habits: habits,
+        completedHabits: completedHabits,
+        incompleteHabits: incompleteHabits,
+      ));
+    } catch (e) {
+      emit(const HabitsError('Failed to add habits'));
+    }
+  }
 
   Future<void> deleteHabit(String habitId) async {
     emit(HabitsLoading());

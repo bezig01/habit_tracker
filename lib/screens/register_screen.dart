@@ -5,6 +5,7 @@ import '../bloc/auth/auth_event.dart';
 import '../bloc/auth/auth_state.dart';
 import '../bloc/countries/countries_cubit.dart';
 import '../bloc/countries/countries_state.dart';
+import '../bloc/habits/habits_cubit.dart';
 import '../services/countries_service.dart';
 import 'home_screen.dart';
 
@@ -22,6 +23,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _ageController = TextEditingController();
   final _countryController = TextEditingController();
+  
+  List<String> availableHabits = [
+    'Wake Up Early',
+    'Workout',
+    'Drink Water',
+    'Meditate',
+    'Read a Book',
+    'Practice Gratitude',
+    'Sleep 8 Hours',
+    'Eat Healthy',
+    'Journal',
+    'Walk 10,000 Steps'
+  ];
+  
+  List<String> selectedHabits = [];
 
   @override
   void initState() {
@@ -61,7 +77,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
           countryName,
         ),
       );
+      
+      // We'll handle habit creation in the listener after successful registration
     }
+  }
+  
+  void _createInitialHabits() {
+    // Prepare data for batch add
+    final habitsData = selectedHabits.map((habitName) {
+      // We'll use different colors for different habits
+      final color = Colors.primaries[availableHabits.indexOf(habitName) % Colors.primaries.length];
+      return {
+        'name': habitName,
+        'color': color,
+      };
+    }).toList();
+    
+    // Add all habits at once using batch method
+    context.read<HabitsCubit>().addMultipleHabits(habitsData);
+  }
+  
+  void _toggleHabitSelection(String habit) {
+    setState(() {
+      if (selectedHabits.contains(habit)) {
+        selectedHabits.remove(habit);
+      } else {
+        selectedHabits.add(habit);
+      }
+    });
   }
 
   Widget _buildCountryField() {
@@ -152,6 +195,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
+          // Create selected habits before navigating away from this screen
+          if (selectedHabits.isNotEmpty) {
+            _createInitialHabits();
+          }
+          
+          // Navigate to home screen
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomeScreen()),
           );
@@ -261,6 +310,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildCountryField(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Select habits you want to track:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    'Choose habits you\'d like to start tracking right away',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availableHabits.map((habit) {
+                      final isSelected = selectedHabits.contains(habit);
+                      return FilterChip(
+                        selected: isSelected,
+                        label: Text(habit),
+                        onSelected: (selected) {
+                          _toggleHabitSelection(habit);
+                        },
+                        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                        labelStyle: TextStyle(
+                          color: isSelected 
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    }).toList(),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

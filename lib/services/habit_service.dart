@@ -22,6 +22,42 @@ class HabitService {
     habits.add(newHabit);
     await _storageService.saveHabits(habits);
   }
+  
+  // This method adds a habit and returns it
+  Future<Habit> addHabitAndReturn(String name, Color color) async {
+    final habits = await getHabits();
+    final newHabit = Habit(
+      id: _generateId(),
+      name: name,
+      color: color,
+      createdAt: DateTime.now(),
+      completedDates: [],
+    );
+    habits.add(newHabit);
+    await _storageService.saveHabits(habits);
+    return newHabit;
+  }
+  
+  // This method adds multiple habits at once
+  Future<List<Habit>> addMultipleHabits(List<Map<String, dynamic>> habitsData) async {
+    final habits = await getHabits();
+    final newHabits = <Habit>[];
+    
+    for (var habitData in habitsData) {
+      final newHabit = Habit(
+        id: _generateId(),
+        name: habitData['name'],
+        color: habitData['color'],
+        createdAt: DateTime.now(),
+        completedDates: [],
+      );
+      newHabits.add(newHabit);
+      habits.add(newHabit);
+    }
+    
+    await _storageService.saveHabits(habits);
+    return newHabits;
+  }
 
   Future<void> deleteHabit(String habitId) async {
     final habits = await getHabits();
