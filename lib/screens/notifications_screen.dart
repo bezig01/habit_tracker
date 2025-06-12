@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/habit.dart';
 import '../services/storage_service.dart';
 import '../services/habit_service.dart';
+import '../services/notification_manager.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -13,16 +14,19 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final StorageService _storageService = StorageService();
   final HabitService _habitService = HabitService();
+  final NotificationManager _notificationManager = NotificationManager();
   
   bool _notificationsEnabled = false;
   List<Habit> _habits = [];
   List<String> _selectedHabitIds = [];
   bool _isLoading = true;
+  Map<String, String> _notificationTimes = {};
 
   @override
   void initState() {
     super.initState();
     _loadNotificationSettings();
+    _notificationTimes = _notificationManager.getNotificationTimesForDisplay();
   }
 
   Future<void> _loadNotificationSettings() async {
@@ -40,7 +44,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _toggleNotifications(bool enabled) async {
-    await _storageService.setNotificationsEnabled(enabled);
+    if (enabled) {
+      // Check permissions first
+      bool permissionsGranted = await _notificationManager.areNotificationsPermissionsGranted();
+      
+      if (!permissionsGranted) {
+        // Request permissions if not granted
+        permissionsGranted = await _notificationManager.requestPermissions();
+        
+        if (!permissionsGranted) {
+          // Show error message if permissions denied
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Notification permissions required but denied'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+    
+    // Apply the setting
+    await _notificationManager.setNotificationsEnabled(enabled);
     setState(() {
       _notificationsEnabled = enabled;
     });
@@ -74,7 +102,68 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     });
 
-    await _storageService.setSelectedHabitsForNotifications(_selectedHabitIds);
+    // Use the notification manager to toggle the habit
+    await _notificationManager.toggleHabitNotification(habitId);
+  }
+
+  /// Display debug information about notifications
+  Future<void> _showNotificationDebugInfo() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Get diagnostic info
+      Map<String, dynamic> diagnostics = await _notificationManager.getNotificationDiagnostics();
+      
+      if (!mounted) return;
+      
+      // Format the diagnostic info for display
+      final StringBuffer infoText = StringBuffer();
+      diagnostics.forEach((key, value) {
+        infoText.writeln('$key: $value');
+      });
+      
+      // Show dialog with info
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Notification Diagnostics'),
+          content: SingleChildScrollView(
+            child: Text(infoText.toString()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('CLOSE'),
+            ),
+            TextButton(
+              onPressed: () {
+                // Request permissions again
+                _notificationManager.requestPermissions().then((granted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(granted 
+                          ? 'Permissions granted' 
+                          : 'Permissions denied'),
+                      backgroundColor: granted ? Colors.green : Colors.red,
+                    ),
+                  );
+                });
+              },
+              child: const Text('REQUEST PERMISSIONS'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -83,6 +172,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('Notifications'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.watch_later),
+            tooltip: 'Test notification',
+            onPressed: _testNotification,
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Debug notifications',
+            onPressed: _showNotificationDebugInfo,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -180,9 +281,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildScheduleItem('Morning', '8:00 AM', Icons.wb_sunny),
-                  _buildScheduleItem('Afternoon', '2:00 PM', Icons.wb_cloudy),
-                  _buildScheduleItem('Evening', '7:00 PM', Icons.nightlight),
+                  _buildScheduleItem('Morning', _notificationTimes['Morning'] ?? '8:00 AM', Icons.wb_sunny),
+                  _buildScheduleItem('Afternoon', _notificationTimes['Afternoon'] ?? '2:00 PM', Icons.wb_cloudy),
+                  _buildScheduleItem('Evening', _notificationTimes['Evening'] ?? '7:00 PM', Icons.nightlight),
                 ],
               ),
             ),
@@ -360,5 +461,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
       ),
     );
+  }
+  
+  /// Test scheduling an immediate notification
+  Future<void> _testNotification() async {
+    // Check if notifications are enabled
+    if (!_notificationsEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enable notifications first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // Check if notification permissions are granted
+    bool permissionsGranted = await _notificationManager.areNotificationsPermissionsGranted();
+    
+    if (!permissionsGranted) {
+      // Request permissions if not granted
+      permissionsGranted = await _notificationManager.requestPermissions();
+      
+      if (!permissionsGranted) {
+        // Show error message if permissions denied
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notification permissions required but denied'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+    
+    // Schedule a test notification to appear 5 seconds from now
+    try {
+      await _notificationManager.scheduleTestNotification();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Test notification scheduled (5 seconds)'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error scheduling notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

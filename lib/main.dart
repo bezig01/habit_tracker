@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/auth_service.dart';
 import 'services/habit_service.dart';
 import 'services/countries_service.dart';
+import 'services/notification_manager.dart';
 import 'bloc/auth/auth_bloc.dart';
 import 'bloc/auth/auth_event.dart';
 import 'bloc/auth/auth_state.dart';
@@ -11,7 +14,20 @@ import 'bloc/countries/countries_cubit.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+// This handler is needed for processing background notification actions
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  // Handle notification response when app is in background
+  // You can add logging or other non-UI background processing here
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize notification manager
+  final notificationManager = NotificationManager();
+  await notificationManager.initialize();
+  
   runApp(const HabitTrackerApp());
 }
 
