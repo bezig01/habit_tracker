@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/auth/auth_state.dart';
+import '../bloc/countries/countries_cubit.dart';
+import '../bloc/countries/countries_state.dart';
+import '../services/countries_service.dart';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -21,6 +24,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _countryController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    context.read<CountriesCubit>().loadCountries();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _usernameController.dispose();
@@ -32,16 +41,110 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _register() {
     if (_formKey.currentState!.validate()) {
+      final countriesState = context.read<CountriesCubit>().state;
+      String countryName = '';
+      
+      if (countriesState is CountriesLoaded && countriesState.selectedCountry != null) {
+        countryName = countriesState.selectedCountry!.name;
+      } else if (countriesState is CountriesError && countriesState.fallbackCountries.isNotEmpty) {
+        countryName = _countryController.text.trim();
+      } else {
+        countryName = _countryController.text.trim();
+      }
+      
       context.read<AuthBloc>().add(
         AuthRegisterRequested(
           _nameController.text.trim(),
           _usernameController.text.trim(),
           _passwordController.text,
           int.parse(_ageController.text),
-          _countryController.text.trim(),
+          countryName,
         ),
       );
     }
+  }
+
+  Widget _buildCountryField() {
+    return BlocBuilder<CountriesCubit, CountriesState>(
+      builder: (context, state) {
+        if (state is CountriesLoading) {
+          return DropdownButtonFormField<Country>(
+            items: const [],
+            onChanged: null,
+            decoration: const InputDecoration(
+              labelText: 'Country',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.public),
+            ),
+            hint: const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Loading countries...'),
+              ],
+            ),
+          );
+        }
+
+        List<Country> countries = [];
+        Country? selectedCountry;
+        bool hasError = false;
+
+        if (state is CountriesLoaded) {
+          countries = state.countries;
+          selectedCountry = state.selectedCountry;
+        } else if (state is CountriesError) {
+          countries = state.fallbackCountries;
+          hasError = true;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<Country>(
+              value: selectedCountry,
+              decoration: const InputDecoration(
+                labelText: 'Country',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.public),
+              ),
+              hint: const Text('Select your country'),
+              items: countries.map((Country country) {
+                return DropdownMenuItem<Country>(
+                  value: country,
+                  child: Text(country.name),
+                );
+              }).toList(),
+              onChanged: (Country? newValue) {
+                context.read<CountriesCubit>().selectCountry(newValue);
+                _countryController.text = newValue?.name ?? '';
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Please select your country';
+                }
+                return null;
+              },
+              isExpanded: true,
+            ),
+            if (hasError) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Using offline countries list. Check your internet connection.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -157,20 +260,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _countryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Country',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.public),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your country';
-                      }
-                      return null;
-                    },
-                  ),
+                  _buildCountryField(),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

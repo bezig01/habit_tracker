@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'services/auth_service.dart';
 import 'services/habit_service.dart';
+import 'services/countries_service.dart';
 import 'bloc/auth/auth_bloc.dart';
 import 'bloc/auth/auth_event.dart';
 import 'bloc/auth/auth_state.dart';
 import 'bloc/habits/habits_cubit.dart';
+import 'bloc/countries/countries_cubit.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -26,6 +28,9 @@ class HabitTrackerApp extends StatelessWidget {
         RepositoryProvider<HabitService>(
           create: (context) => HabitService(),
         ),
+        RepositoryProvider<CountriesService>(
+          create: (context) => CountriesService(),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -37,6 +42,11 @@ class HabitTrackerApp extends StatelessWidget {
           BlocProvider<HabitsCubit>(
             create: (context) => HabitsCubit(
               context.read<HabitService>(),
+            ),
+          ),
+          BlocProvider<CountriesCubit>(
+            create: (context) => CountriesCubit(
+              context.read<CountriesService>(),
             ),
           ),
         ],

@@ -4,6 +4,9 @@ import '../models/user.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/auth/auth_state.dart';
+import '../bloc/countries/countries_cubit.dart';
+import '../bloc/countries/countries_state.dart';
+import '../services/countries_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,6 +23,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _countryController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    context.read<CountriesCubit>().loadCountries();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _usernameController.dispose();
@@ -33,19 +42,113 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _usernameController.text = user.username;
     _ageController.text = user.age.toString();
     _countryController.text = user.country;
+    // Set the initial country in the cubit directly when populating fields
+    context.read<CountriesCubit>().setInitialCountry(user.country);
   }
 
   void _saveProfile() {
     if (_formKey.currentState!.validate()) {
+      final countriesState = context.read<CountriesCubit>().state;
+      String countryName = '';
+      
+      if (countriesState is CountriesLoaded && countriesState.selectedCountry != null) {
+        countryName = countriesState.selectedCountry!.name;
+      } else {
+        countryName = _countryController.text.trim();
+      }
+      
       context.read<AuthBloc>().add(
         AuthProfileUpdateRequested(
           _nameController.text.trim(),
           _usernameController.text.trim(),
           int.parse(_ageController.text),
-          _countryController.text.trim(),
+          countryName,
         ),
       );
     }
+  }
+
+  Widget _buildCountryField() {
+    return BlocBuilder<CountriesCubit, CountriesState>(
+      builder: (context, state) {
+        if (state is CountriesLoading) {
+          return DropdownButtonFormField<Country>(
+            items: const [],
+            onChanged: null,
+            decoration: const InputDecoration(
+              labelText: 'Country',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.public),
+            ),
+            hint: const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Loading countries...'),
+              ],
+            ),
+          );
+        }
+
+        List<Country> countries = [];
+        Country? selectedCountry;
+        bool hasError = false;
+
+        if (state is CountriesLoaded) {
+          countries = state.countries;
+          selectedCountry = state.selectedCountry;
+        } else if (state is CountriesError) {
+          countries = state.fallbackCountries;
+          hasError = true;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<Country>(
+              value: selectedCountry,
+              decoration: const InputDecoration(
+                labelText: 'Country',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.public),
+              ),
+              hint: const Text('Select your country'),
+              items: countries.map((Country country) {
+                return DropdownMenuItem<Country>(
+                  value: country,
+                  child: Text(country.name),
+                );
+              }).toList(),
+              onChanged: (Country? newValue) {
+                context.read<CountriesCubit>().selectCountry(newValue);
+                _countryController.text = newValue?.name ?? '';
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Please select your country';
+                }
+                return null;
+              },
+              isExpanded: true,
+            ),
+            if (hasError) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Using offline countries list. Check your internet connection.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -69,8 +172,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
       },
-      builder: (context, state) {
-        if (state is AuthLoading) {
+      builder: (context, authState) {
+        if (authState is AuthLoading) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -79,28 +182,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         User? currentUser;
-        bool isLoading = state is AuthLoading;
+        bool isLoading = authState is AuthLoading;
 
-        if (state is AuthAuthenticated) {
-          currentUser = state.user;
+        if (authState is AuthAuthenticated) {
+          currentUser = authState.user;
           _populateFields(currentUser);
-        } else if (state is AuthProfileUpdateSuccess) {
-          currentUser = state.user;
+        } else if (authState is AuthProfileUpdateSuccess) {
+          currentUser = authState.user;
           _populateFields(currentUser);
         }
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Profile'),
-            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.save),
-                onPressed: isLoading ? null : _saveProfile,
+        // Listen to countries state and set initial country when ready
+        return BlocBuilder<CountriesCubit, CountriesState>(
+          builder: (context, countriesState) {
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Profile'),
+                backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.save),
+                    onPressed: isLoading ? null : _saveProfile,
+                  ),
+                ],
               ),
-            ],
-          ),
-          body: _buildProfileForm(currentUser, isLoading),
+              body: _buildProfileForm(currentUser, isLoading),
+            );
+          },
         );
       },
     );
@@ -187,20 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _countryController,
-              decoration: const InputDecoration(
-                labelText: 'Country',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.public),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your country';
-                }
-                return null;
-              },
-            ),
+            _buildCountryField(),
             const SizedBox(height: 32),
             
             // Account Information Display
@@ -239,7 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: isLoading ? null : _saveProfile,
                 child: isLoading
                     ? const CircularProgressIndicator()
-                    : const Text('Save Changes'),
+                    : const Text('Update Profile'),
               ),
             ),
           ],
@@ -252,15 +347,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 80,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w500,
-                color: Colors.grey,
+                color: Colors.grey.shade700,
               ),
             ),
           ),
@@ -268,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               value,
               style: const TextStyle(
-                fontWeight: FontWeight.w500,
+                fontSize: 16,
               ),
             ),
           ),
