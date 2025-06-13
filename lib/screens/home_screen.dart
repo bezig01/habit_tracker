@@ -11,6 +11,7 @@ import 'habits_screen.dart';
 import 'reports_screen.dart';
 import 'notifications_screen.dart';
 import 'login_screen.dart';
+import 'habit_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -456,7 +457,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onPressed: () => _toggleHabitCompletion(habit.id),
         ),
+        onTap: () => _navigateToHabitDetails(habit),
       ),
     );
+  }
+  
+  Future<void> _navigateToHabitDetails(Habit habit) async {
+    // Import at the top of the file: import 'habit_detail_screen.dart';
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => HabitDetailScreen(habit: habit),
+      ),
+    );
+    
+    // Reload habits if changes were made
+    if (result == true) {
+      context.read<HabitsCubit>().loadHabits();
+    }
   }
 }

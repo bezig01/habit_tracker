@@ -68,6 +68,17 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_notificationsEnabledKey) ?? false;
   }
+  
+  // Individual habit notification settings
+  Future<void> saveHabitNotificationSetting(String habitId, bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('habit_notification_${habitId}', enabled);
+  }
+
+  Future<bool> getHabitNotificationSetting(String habitId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('habit_notification_${habitId}') ?? false;
+  }
 
   Future<void> setSelectedHabitsForNotifications(List<String> habitIds) async {
     final prefs = await SharedPreferences.getInstance();

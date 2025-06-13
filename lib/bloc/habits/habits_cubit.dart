@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../services/habit_service.dart';
+import '../../models/habit.dart';
 import 'habits_state.dart';
 
 class HabitsCubit extends Cubit<HabitsState> {
@@ -113,6 +114,35 @@ class HabitsCubit extends Cubit<HabitsState> {
       return await _habitService.getWeeklyProgress();
     } catch (e) {
       return {};
+    }
+  }
+  
+  Future<List<Habit>> getHabits() async {
+    try {
+      return await _habitService.getHabits();
+    } catch (e) {
+      return [];
+    }
+  }
+  
+  Future<void> updateHabit(String habitId, String name, Color color) async {
+    emit(HabitsLoading());
+    try {
+      await _habitService.updateHabit(habitId, name, color);
+      
+      // Reload habits after updating
+      final habits = await _habitService.getHabits();
+      final completedHabits = await _habitService.getTodayCompletedHabits();
+      final incompleteHabits = await _habitService.getTodayIncompleteHabits();
+      
+      emit(HabitsOperationSuccess(
+        message: 'Habit updated successfully!',
+        habits: habits,
+        completedHabits: completedHabits,
+        incompleteHabits: incompleteHabits,
+      ));
+    } catch (e) {
+      emit(HabitsError('Failed to update habit: ${e.toString()}'));
     }
   }
 }

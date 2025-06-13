@@ -270,6 +270,52 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.cancelAll();
   }
   
+  // Schedule a notification for a specific habit
+  Future<void> scheduleHabitReminder(Habit habit) async {
+    int id = int.parse(habit.id.hashCode.toString().substring(0, 6).replaceAll('-', ''));
+    
+    // Set for default time (8:00 AM)
+    final now = DateTime.now();
+    DateTime scheduledDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      8, // 8 AM default
+      0,
+    );
+    
+    // If the scheduled time is already past for today, set it for tomorrow
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+    
+    await _scheduleSingleNotification(
+      id: id,
+      title: 'Reminder: ${habit.name}',
+      body: 'Time to work on your habit!',
+      scheduledDate: scheduledDate,
+      payload: habit.id,
+      groupKey: 'com.habittracker.notifications.habit',
+    );
+    
+    // Save to preferences that this habit has notifications enabled
+    await _storageService.saveHabitNotificationSetting(habit.id, true);
+  }
+  
+  // Cancel notifications for a specific habit
+  Future<void> cancelHabitReminder(Habit habit) async {
+    int id = int.parse(habit.id.hashCode.toString().substring(0, 6).replaceAll('-', ''));
+    await flutterLocalNotificationsPlugin.cancel(id);
+    
+    // Save to preferences that this habit has notifications disabled
+    await _storageService.saveHabitNotificationSetting(habit.id, false);
+  }
+  
+  // Check if a habit has notifications enabled
+  Future<bool> isHabitReminderEnabled(String habitId) async {
+    return await _storageService.getHabitNotificationSetting(habitId);
+  }
+  
   // Helper method to convert DateTime to TZDateTime safely
   tz.TZDateTime _convertToTZDateTime(DateTime dateTime) {
     try {

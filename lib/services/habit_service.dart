@@ -141,6 +141,22 @@ class HabitService {
     final habits = await getHabits();
     return habits.where((habit) => !habit.isCompletedToday()).toList();
   }
+  
+  Future<void> updateHabit(String habitId, String name, Color color) async {
+    final habits = await getHabits();
+    final habitIndex = habits.indexWhere((habit) => habit.id == habitId);
+    
+    if (habitIndex != -1) {
+      final habit = habits[habitIndex];
+      final updatedHabit = habit.copyWith(
+        name: name,
+        color: color,
+      );
+      
+      habits[habitIndex] = updatedHabit;
+      await _storageService.saveHabits(habits);
+    }
+  }
 
   String _generateId() {
     return DateTime.now().millisecondsSinceEpoch.toString() + 
